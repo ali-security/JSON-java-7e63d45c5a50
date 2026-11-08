@@ -38,6 +38,38 @@ import org.json.*;
 public class Util {
 
     /**
+     * Runs the given task on a separate thread that has a large stack and
+     * returns whatever the task threw. This makes it possible to assert how
+     * deeply nested input is handled even though the test JVM may be run
+     * with a small stack (for example -Xss512k): without a nesting limit the
+     * task fails with a StackOverflowError, with one it fails with the
+     * expected JSONException.
+     * @param task the task to run
+     * @return the Throwable thrown by the task, or null if it completed normally
+     */
+    public static Throwable throwableFromLargeStack(final Runnable task) {
+        final Throwable[] thrown = new Throwable[1];
+        Thread thread = new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    task.run();
+                } catch (Throwable t) {
+                    thrown[0] = t;
+                }
+            }
+        }, "large-stack-test", 8L * 1024L * 1024L);
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the large stack test thread", e);
+        }
+        return thrown[0];
+    }
+
+    /**
      * Compares two JSONArrays for equality.
      * The arrays need not be in the same order.
      * @param jsonArray created by the code to be tested
